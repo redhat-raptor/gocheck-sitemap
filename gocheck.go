@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io/ioutil"
 	"encoding/xml"
-
+	"time"
 )
+
+const CheckInterval = 2
 
 type URLs struct {
 	Locs    []string    `xml:"url>loc"`
@@ -32,6 +34,15 @@ func getSitemap(sitemapUrl string) []byte {
 	return bodyBytes
 }
 
+func checkSiteamp(urls URLs) {
+	for _, anUrl := range urls.Locs {
+		time.Sleep(CheckInterval * time.Second)
+		fmt.Println(anUrl)
+	}
+
+	os.Exit(0)
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("No sitemap url passed!")
@@ -43,5 +54,8 @@ func main() {
 
 	var urls URLs
 	xml.Unmarshal(sitemap, &urls)
-	fmt.Println(urls.Locs[1])
+
+	for {
+		checkSiteamp(urls)
+	}
 }
