@@ -14,8 +14,9 @@ const CheckInterval = 2
 
 type URLs struct {
 	Locs    []string    `xml:"url>loc"`
-	httpStatus	int
 }
+
+var URLStatuses = map[string]int{}
 
 func getSitemap(sitemapUrl string) []byte {
 	resp, err := http.Get(sitemapUrl)
@@ -43,6 +44,7 @@ func checkSitemap(urls URLs) {
 			continue
 		}
 
+		URLStatuses[anUrl] = statusCode
 		fmt.Println(anUrl, statusCode)
 	}
 
