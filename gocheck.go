@@ -14,7 +14,7 @@ const CheckInterval = 2
 
 type URLs struct {
 	Locs    []string    `xml:"url>loc"`
-	httpStatus	int8
+	httpStatus	int
 }
 
 func getSitemap(sitemapUrl string) []byte {
@@ -34,13 +34,28 @@ func getSitemap(sitemapUrl string) []byte {
 	return bodyBytes
 }
 
-func checkSiteamp(urls URLs) {
+func checkSitemap(urls URLs) {
 	for _, anUrl := range urls.Locs {
 		time.Sleep(CheckInterval * time.Second)
-		fmt.Println(anUrl)
+
+		statusCode, err := getHTTPStatus(anUrl)
+		if err != nil {
+			continue
+		}
+
+		fmt.Println(anUrl, statusCode)
 	}
 
 	os.Exit(0)
+}
+
+func getHTTPStatus(anUrl string) (int, error) {
+	resp, err := http.Get(anUrl)
+	if err != nil {
+		return 0, err
+	}
+
+	return resp.StatusCode, nil
 }
 
 func main() {
@@ -56,6 +71,6 @@ func main() {
 	xml.Unmarshal(sitemap, &urls)
 
 	for {
-		checkSiteamp(urls)
+		checkSitemap(urls)
 	}
 }
