@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"encoding/xml"
 	"time"
+	"encoding/json"
 )
 
 const CheckInterval = 2
@@ -60,6 +61,17 @@ func getHTTPStatus(anUrl string) (int, error) {
 	return resp.StatusCode, nil
 }
 
+func serveHTTPStatuses(w http.ResponseWriter, r *http.Request) {
+	js, err := json.Marshal(URLStatuses)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(js)
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		log.Fatal("No sitemap url passed!")
@@ -71,6 +83,10 @@ func main() {
 
 	var urls URLs
 	xml.Unmarshal(sitemap, &urls)
+
+	//Listen to port to serve url statuses
+	http.HandleFunc("/", serveHTTPStatuses)
+	http.ListenAndServe(":3000", nil)
 
 	for {
 		checkSitemap(urls)
