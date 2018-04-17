@@ -15,8 +15,8 @@ type URLs struct {
 	httpStatus	int8
 }
 
-func get_sitemap(sitemap_url string) []byte {
-	resp, err := http.Get(sitemap_url)
+func getSitemap(sitemapUrl string) []byte {
+	resp, err := http.Get(sitemapUrl)
 	if err != nil {
 		log.Fatal("Error: ", err)
 		os.Exit(1)
@@ -38,8 +38,8 @@ func main() {
 		os.Exit(0)
 	}
 
-	sitemap_url := os.Args[1]
-	sitemap := get_sitemap(sitemap_url)
+	siteMapUrls := os.Args[1]
+	sitemap := getSitemap(siteMapUrls)
 
 	var urls URLs
 	xml.Unmarshal(sitemap, &urls)
