@@ -19,6 +19,16 @@ type URLs struct {
 
 var URLStatuses = map[string]int{}
 
+var httpAddr = fmt.Sprintf(":%s", getEnv("PORT", "3000"))
+
+
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok {
+		return value
+	}
+	return fallback
+}
+
 func getSitemap(sitemapUrl string) []byte {
 	resp, err := http.Get(sitemapUrl)
 	if err != nil {
@@ -84,8 +94,9 @@ func main() {
 
 	//Listen to port to serve url statuses
 	http.HandleFunc("/", serveHTTPStatuses)
+	log.Println("Starting server ", httpAddr)
 	go func() {
-		log.Println(http.ListenAndServe(":3000", nil))
+		log.Println(http.ListenAndServe(httpAddr, nil))
 	}()
 
 	for {
