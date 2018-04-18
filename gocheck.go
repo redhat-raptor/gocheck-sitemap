@@ -48,8 +48,6 @@ func checkSitemap(urls URLs) {
 		URLStatuses[anUrl] = statusCode
 		fmt.Println(anUrl, statusCode)
 	}
-
-	os.Exit(0)
 }
 
 func getHTTPStatus(anUrl string) (int, error) {
@@ -86,7 +84,9 @@ func main() {
 
 	//Listen to port to serve url statuses
 	http.HandleFunc("/", serveHTTPStatuses)
-	http.ListenAndServe(":3000", nil)
+	go func() {
+		log.Println(http.ListenAndServe(":3000", nil))
+	}()
 
 	for {
 		checkSitemap(urls)
