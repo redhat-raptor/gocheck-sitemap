@@ -11,6 +11,10 @@ import (
 	"encoding/json"
 )
 
+var httpClient = &http.Client{
+	Timeout: time.Second * 10,
+}
+
 const CheckInterval = 2
 
 type URLs struct {
@@ -30,7 +34,7 @@ func getEnv(key, fallback string) string {
 }
 
 func getSitemap(sitemapUrl string) []byte {
-	resp, err := http.Get(sitemapUrl)
+	resp, err := httpClient.Get(sitemapUrl)
 	if err != nil {
 		log.Fatal("Error: ", err)
 		os.Exit(1)
@@ -95,11 +99,12 @@ func main() {
 	//Listen to port to serve url statuses
 	http.HandleFunc("/", serveHTTPStatuses)
 	log.Println("Starting server ", httpAddr)
+
 	go func() {
-		log.Println(http.ListenAndServe(httpAddr, nil))
+		for {
+			checkSitemap(urls)
+		}
 	}()
 
-	for {
-		checkSitemap(urls)
-	}
+	log.Println(http.ListenAndServe(httpAddr, nil))
 }
