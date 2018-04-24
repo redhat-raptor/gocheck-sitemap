@@ -85,12 +85,13 @@ func serveHTTPStatuses(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	if len(os.Args) < 2 {
+	siteMapUrls := os.Getenv("SITEMAP")
+
+	if siteMapUrls == "" {
 		log.Fatal("No sitemap url passed!")
-		os.Exit(0)
+		os.Exit(1)
 	}
 
-	siteMapUrls := os.Args[1]
 	sitemap := getSitemap(siteMapUrls)
 
 	var urls URLs
