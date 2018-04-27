@@ -19,5 +19,7 @@ curl http://localhost:3000/
 
 # Future
 - Page load time
+- Page size
+- Redirects
 - First byte 
 - more
