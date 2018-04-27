@@ -1,49 +1,22 @@
-package main
+package httpstat
 
 import (
 	"context"
 	"crypto/tls"
 	"encoding/pem"
-	"flag"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"log"
-	"mime"
 	"net"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
-	"os"
-	"path"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"golang.org/x/net/http2"
-)
-
-const (
-	HTTPSTemplate = `` +
-		`  DNS Lookup   TCP Connection   TLS Handshake   Server Processing   Content Transfer` + "\n" +
-		`[%s  |     %s  |    %s  |        %s  |       %s  ]` + "\n" +
-		`            |                |               |                   |                  |` + "\n" +
-		`   namelookup:%s      |               |                   |                  |` + "\n" +
-		`                       connect:%s     |                   |                  |` + "\n" +
-		`                                   pretransfer:%s         |                  |` + "\n" +
-		`                                                     starttransfer:%s        |` + "\n" +
-		`                                                                                total:%s` + "\n"
-
-	HTTPTemplate = `` +
-		`   DNS Lookup   TCP Connection   Server Processing   Content Transfer` + "\n" +
-		`[ %s  |     %s  |        %s  |       %s  ]` + "\n" +
-		`             |                |                   |                  |` + "\n" +
-		`    namelookup:%s      |                   |                  |` + "\n" +
-		`                        connect:%s         |                  |` + "\n" +
-		`                                      starttransfer:%s        |` + "\n" +
-		`                                                                 total:%s` + "\n"
 )
 
 var (
@@ -67,66 +40,12 @@ var (
 
 const maxRedirects = 10
 
-func init() {
-	flag.StringVar(&httpMethod, "X", "GET", "HTTP method to use")
-	flag.StringVar(&postBody, "d", "", "the body of a POST or PUT request; from file use @filename")
-	flag.BoolVar(&followRedirects, "L", false, "follow 30x redirects")
-	flag.BoolVar(&onlyHeader, "I", false, "don't read body of request")
-	flag.BoolVar(&insecure, "k", false, "allow insecure SSL connections")
-	flag.Var(&httpHeaders, "H", "set HTTP header; repeatable: -H 'Accept: ...' -H 'Range: ...'")
-	flag.BoolVar(&saveOutput, "O", false, "save body as remote filename")
-	flag.StringVar(&outputFile, "o", "", "output file for body")
-	flag.BoolVar(&showVersion, "v", false, "print version number")
-	flag.StringVar(&clientCertFile, "E", "", "client cert file for tls config")
 
-	flag.Usage = usage
-}
 
-func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: %s [OPTIONS] URL\n\n", os.Args[0])
-	fmt.Fprintln(os.Stderr, "OPTIONS:")
-	flag.PrintDefaults()
-	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintln(os.Stderr, "ENVIRONMENT:")
-	fmt.Fprintln(os.Stderr, "  HTTP_PROXY    proxy for HTTP requests; complete URL or HOST[:PORT]")
-	fmt.Fprintln(os.Stderr, "                used for HTTPS requests if HTTPS_PROXY undefined")
-	fmt.Fprintln(os.Stderr, "  HTTPS_PROXY   proxy for HTTPS requests; complete URL or HOST[:PORT]")
-	fmt.Fprintln(os.Stderr, "  NO_PROXY      comma-separated list of hosts to exclude from proxy")
-}
-
-func printf(format string, a ...interface{}) (n int, err error) {
-	return fmt.Fprintf(color.Output, format, a...)
-}
-
-func grayscale(code color.Attribute) func(string, ...interface{}) string {
-	return color.New(code + 232).SprintfFunc()
-}
-
-func main() {
-	flag.Parse()
-
-	if showVersion {
-		fmt.Printf("%s %s (runtime: %s)\n", os.Args[0], version, runtime.Version())
-		os.Exit(0)
-	}
-
-	args := flag.Args()
-	if len(args) != 1 {
-		flag.Usage()
-		os.Exit(2)
-	}
-
-	if (httpMethod == "POST" || httpMethod == "PUT") && postBody == "" {
-		log.Fatal("must supply post body using -d when POST or PUT is used")
-	}
-
-	if onlyHeader {
-		httpMethod = "HEAD"
-	}
-
-	url := parseURL(args[0])
-
-	visit(url)
+func HTTPStat(url string, method string) {
+	httpMethod = method
+	parsedUrl := parseURL(url)
+	visit(parsedUrl)
 }
 
 // readClientCert - helper function to read client certificate
@@ -217,7 +136,7 @@ func visit(url *url.URL) {
 			}
 			t2 = time.Now()
 
-			printf("\n%s%s\n", color.GreenString("Connected to "), color.CyanString(addr))
+			fmt.Printf("\n%s%s\n", "Connected to ", addr)
 		},
 		GotConn:              func(_ httptrace.GotConnInfo) { t3 = time.Now() },
 		GotFirstResponseByte: func() { t4 = time.Now() },
@@ -277,7 +196,7 @@ func visit(url *url.URL) {
 	}
 
 	// print status line and headers
-	printf("\n%s%s%s\n", color.GreenString("HTTP"), grayscale(14)("/"), color.CyanString("%d.%d %s", resp.ProtoMajor, resp.ProtoMinor, resp.Status))
+	fmt.Printf("\n%s%s%s\n", "HTTP", "/", "%d.%d %s", resp.ProtoMajor, resp.ProtoMinor, resp.Status)
 
 	names := make([]string, 0, len(resp.Header))
 	for k := range resp.Header {
@@ -285,32 +204,26 @@ func visit(url *url.URL) {
 	}
 	sort.Sort(headers(names))
 	for _, k := range names {
-		printf("%s %s\n", grayscale(14)(k+":"), color.CyanString(strings.Join(resp.Header[k], ",")))
+		fmt.Printf(k+":", strings.Join(resp.Header[k], ","))
 	}
 
 	if bodyMsg != "" {
-		printf("\n%s\n", bodyMsg)
+		fmt.Printf("\n%s\n", bodyMsg)
 	}
 
 	fmta := func(d time.Duration) string {
-		return color.CyanString("%7dms", int(d/time.Millisecond))
+		return strconv.Itoa(int(d/time.Millisecond))
 	}
 
 	fmtb := func(d time.Duration) string {
-		return color.CyanString("%-9s", strconv.Itoa(int(d/time.Millisecond))+"ms")
-	}
-
-	colorize := func(s string) string {
-		v := strings.Split(s, "\n")
-		v[0] = grayscale(16)(v[0])
-		return strings.Join(v, "\n")
+		return strconv.Itoa(int(d/time.Millisecond)) + "ms"
 	}
 
 	fmt.Println()
 
 	switch url.Scheme {
 	case "https":
-		printf(colorize(HTTPSTemplate),
+		fmt.Println(
 			fmta(t1.Sub(t0)), // dns lookup
 			fmta(t2.Sub(t1)), // tcp connection
 			fmta(t3.Sub(t2)), // tls handshake
@@ -323,7 +236,7 @@ func visit(url *url.URL) {
 			fmtb(t5.Sub(t0)), // total
 		)
 	case "http":
-		printf(colorize(HTTPTemplate),
+		fmt.Println(
 			fmta(t1.Sub(t0)), // dns lookup
 			fmta(t3.Sub(t1)), // tcp connection
 			fmta(t4.Sub(t3)), // server processing
@@ -353,154 +266,3 @@ func visit(url *url.URL) {
 		visit(loc)
 	}
 }
-
-func isRedirect(resp *http.Response) bool {
-	return resp.StatusCode > 299 && resp.StatusCode < 400
-}
-
-func newRequest(method string, url *url.URL, body string) *http.Request {
-	req, err := http.NewRequest(method, url.String(), createBody(body))
-	if err != nil {
-		log.Fatalf("unable to create request: %v", err)
-	}
-	for _, h := range httpHeaders {
-		k, v := headerKeyValue(h)
-		if strings.EqualFold(k, "host") {
-			req.Host = v
-			continue
-		}
-		req.Header.Add(k, v)
-	}
-	return req
-}
-
-func createBody(body string) io.Reader {
-	if strings.HasPrefix(body, "@") {
-		filename := body[1:]
-		f, err := os.Open(filename)
-		if err != nil {
-			log.Fatalf("failed to open data file %s: %v", filename, err)
-		}
-		return f
-	}
-	return strings.NewReader(body)
-}
-
-// getFilenameFromHeaders tries to automatically determine the output filename,
-// when saving to disk, based on the Content-Disposition header.
-// If the header is not present, or it does not contain enough information to
-// determine which filename to use, this function returns "".
-func getFilenameFromHeaders(headers http.Header) string {
-	// if the Content-Disposition header is set parse it
-	if hdr := headers.Get("Content-Disposition"); hdr != "" {
-		// pull the media type, and subsequent params, from
-		// the body of the header field
-		mt, params, err := mime.ParseMediaType(hdr)
-
-		// if there was no error and the media type is attachment
-		if err == nil && mt == "attachment" {
-			if filename := params["filename"]; filename != "" {
-				return filename
-			}
-		}
-	}
-
-	// return an empty string if we were unable to determine the filename
-	return ""
-}
-
-// readResponseBody consumes the body of the response.
-// readResponseBody returns an informational message about the
-// disposition of the response body's contents.
-func readResponseBody(req *http.Request, resp *http.Response) string {
-	if isRedirect(resp) || req.Method == http.MethodHead {
-		return ""
-	}
-
-	w := ioutil.Discard
-	msg := color.CyanString("Body discarded")
-
-	if saveOutput || outputFile != "" {
-		filename := outputFile
-
-		if saveOutput {
-			// try to get the filename from the Content-Disposition header
-			// otherwise fall back to the RequestURI
-			if filename = getFilenameFromHeaders(resp.Header); filename == "" {
-				filename = path.Base(req.URL.RequestURI())
-			}
-
-			if filename == "/" {
-				log.Fatalf("No remote filename; specify output filename with -o to save response body")
-			}
-		}
-
-		f, err := os.Create(filename)
-		if err != nil {
-			log.Fatalf("unable to create file %s: %v", filename, err)
-		}
-		defer f.Close()
-		w = f
-		msg = color.CyanString("Body read")
-	}
-
-	if _, err := io.Copy(w, resp.Body); err != nil && w != ioutil.Discard {
-		log.Fatalf("failed to read response body: %v", err)
-	}
-
-	return msg
-}
-
-type headers []string
-
-func (h headers) String() string {
-	var o []string
-	for _, v := range h {
-		o = append(o, "-H "+v)
-	}
-	return strings.Join(o, " ")
-}
-
-func (h *headers) Set(v string) error {
-	*h = append(*h, v)
-	return nil
-}
-
-func (h headers) Len() int      { return len(h) }
-func (h headers) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
-func (h headers) Less(i, j int) bool {
-	a, b := h[i], h[j]
-
-	// server always sorts at the top
-	if a == "Server" {
-		return true
-	}
-	if b == "Server" {
-		return false
-	}
-
-	endtoend := func(n string) bool {
-		// https://www.w3.org/Protocols/rfc2616/rfc2616-sec13.html#sec13.5.1
-		switch n {
-		case "Connection",
-			"Keep-Alive",
-			"Proxy-Authenticate",
-			"Proxy-Authorization",
-			"TE",
-			"Trailers",
-			"Transfer-Encoding",
-			"Upgrade":
-			return false
-		default:
-			return true
-		}
-	}
-
-	x, y := endtoend(a), endtoend(b)
-	if x == y {
-		// both are of the same class
-		return a < b
-	}
-	return x
-}
-

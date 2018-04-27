@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"time"
 	"encoding/json"
+	"github.com/redhat-raptor/gocheck-sitemap/httpstat"
 )
 
 var httpClient = &http.Client{
@@ -61,6 +62,8 @@ func checkSitemap(urls URLs) {
 
 		URLStatuses[anUrl] = statusCode
 		fmt.Println(anUrl, statusCode)
+
+		httpstat.HTTPStat(anUrl, "GET")
 	}
 }
 
