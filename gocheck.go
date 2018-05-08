@@ -21,6 +21,11 @@ type URLs struct {
 	Locs    []string    `xml:"url>loc"`
 }
 
+type HTTPStatus struct {
+	Status int
+	Error error
+}
+
 var URLStatuses = map[string]int{}
 
 var httpAddr = fmt.Sprintf(":%s", getEnv("PORT", "3000"))
@@ -50,27 +55,34 @@ func getSitemap(sitemapUrl string) []byte {
 	return bodyBytes
 }
 
-func checkSitemap(urls URLs) {
+func checkSitemap(done chan bool, urls URLs) {
+	httpStatusChannel := make(chan HTTPStatus)
+
 	for _, anUrl := range urls.Locs {
 		time.Sleep(CheckInterval * time.Second)
 
-		statusCode, err := getHTTPStatus(anUrl)
-		if err != nil {
+		getHTTPStatus(httpStatusChannel, anUrl)
+		httpStatus := <- httpStatusChannel
+
+		if httpStatus.Error != nil {
+			log.Println("Error checking http status", httpStatus.Error)
 			continue
 		}
 
-		URLStatuses[anUrl] = statusCode
-		fmt.Println(anUrl, statusCode)
+		URLStatuses[anUrl] = httpStatus.Status
+		fmt.Println(anUrl, httpStatus.Status)
 	}
+
+	done <- true
 }
 
-func getHTTPStatus(anUrl string) (int, error) {
+func getHTTPStatus(ch chan HTTPStatus, anUrl string) {
 	resp, err := http.Get(anUrl)
-	if err != nil {
-		return 0, err
-	}
 
-	return resp.StatusCode, nil
+	ch <- HTTPStatus{
+		Error: err,
+		Status: resp.StatusCode,
+	}
 }
 
 func serveHTTPStatuses(w http.ResponseWriter, r *http.Request) {
@@ -82,6 +94,19 @@ func serveHTTPStatuses(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(js)
+}
+
+func keepChecking(urls URLs) {
+	done := make(chan bool)
+
+	for {
+		checkSitemap(done, urls)
+		completed := <- done
+
+		if completed == true {
+			os.Exit(0)
+		}
+	}
 }
 
 func main() {
@@ -101,11 +126,7 @@ func main() {
 	http.HandleFunc("/", serveHTTPStatuses)
 	log.Println("Starting server ", httpAddr)
 
-	go func() {
-		for {
-			checkSitemap(urls)
-		}
-	}()
+	go keepChecking(urls)
 
 	log.Println(http.ListenAndServe(httpAddr, nil))
 }
