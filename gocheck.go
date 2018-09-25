@@ -9,21 +9,19 @@ import (
 	"encoding/xml"
 	"time"
 	"encoding/json"
-	"sync"
 )
 
 var httpClient = &http.Client{
 	Timeout: time.Second * 10,
 }
 
-const CheckInterval = 2
+const CheckInterval = 10
 
 type URLs struct {
 	Locs    []string    `xml:"url>loc"`
 }
 
 var URLStatuses = map[string]int{}
-var mu sync.Mutex
 
 var httpAddr = fmt.Sprintf(":%s", getEnv("PORT", "3000"))
 
@@ -52,20 +50,14 @@ func getSitemap(sitemapUrl string) []byte {
 	return bodyBytes
 }
 
-func checkSitemap(urls URLs) {
-	for _, anUrl := range urls.Locs {
-		time.Sleep(CheckInterval * time.Second)
-
-		statusCode, err := getHTTPStatus(anUrl)
-		if err != nil {
-			continue
-		}
-
-		mu.Lock()
-		URLStatuses[anUrl] = statusCode
-		mu.Unlock()
-		fmt.Println(anUrl, statusCode)
+func checkSitemap(anUrl string) {
+	statusCode, err := getHTTPStatus(anUrl)
+	if err != nil {
+		continue
 	}
+
+	URLStatuses[anUrl] = statusCode
+	fmt.Println(anUrl, statusCode)
 }
 
 func getHTTPStatus(anUrl string) (int, error) {
@@ -78,9 +70,6 @@ func getHTTPStatus(anUrl string) (int, error) {
 }
 
 func serveHTTPStatuses(w http.ResponseWriter, r *http.Request) {
-	mu.Lock()
-	defer mu.Unlock()
-	
 	js, err := json.Marshal(URLStatuses)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -108,11 +97,32 @@ func main() {
 	http.HandleFunc("/", serveHTTPStatuses)
 	log.Println("Starting server ", httpAddr)
 
-	go func() {
+	for {
+		left := urls.Locs
 		for {
-			checkSitemap(urls)
+			var wg sync.WaitGroup
+			wg.Add(20)
+		
+			for i := 0; i < 20; i++ {
+				if i >= len(left) {
+					break
+				}
+				go func(i int) {
+					defer wg.Done()
+					checkSitemap(left[i])
+				}(i)
+			}
+			
+			wg.Wait()
+			time.Sleep(CheckInterval * time.Second)
+			
+			if len(left) < 20 {
+				left = urls.Locs
+			} else {
+				left = left[20:]
+			}
 		}
-	}()
+	}
 
 	log.Println(http.ListenAndServe(httpAddr, nil))
 }
