@@ -9,6 +9,7 @@ import (
 	"encoding/xml"
 	"time"
 	"encoding/json"
+	"sync"
 )
 
 var httpClient = &http.Client{
@@ -22,6 +23,7 @@ type URLs struct {
 }
 
 var URLStatuses = map[string]int{}
+var mu sync.Mutex
 
 var httpAddr = fmt.Sprintf(":%s", getEnv("PORT", "3000"))
 
@@ -59,7 +61,9 @@ func checkSitemap(urls URLs) {
 			continue
 		}
 
+		mu.Lock()
 		URLStatuses[anUrl] = statusCode
+		mu.Unlock()
 		fmt.Println(anUrl, statusCode)
 	}
 }
@@ -74,6 +78,9 @@ func getHTTPStatus(anUrl string) (int, error) {
 }
 
 func serveHTTPStatuses(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	defer mu.Unlock()
+	
 	js, err := json.Marshal(URLStatuses)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
