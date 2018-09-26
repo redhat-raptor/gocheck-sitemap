@@ -9,6 +9,8 @@ import (
 	"encoding/xml"
 	"time"
 	"encoding/json"
+	"sync"
+	"sync/atomic"
 )
 
 var httpClient = &http.Client{
@@ -50,10 +52,17 @@ func getSitemap(sitemapUrl string) []byte {
 	return bodyBytes
 }
 
-func checkSitemap(anUrl string) {
-	statusCode, err := getHTTPStatus(anUrl)
-	if err != nil {
-		continue
+func checkSitemap(c chan string) {
+	for anUrl := range c {
+		statusCode, err := getHTTPStatus(anUrl)
+		if err != nil {
+			continue
+		}
+
+		mu.Lock()
+		URLStatuses[anUrl] = statusCode
+		mu.Unlock()
+		fmt.Println(anUrl, statusCode)
 	}
 
 	URLStatuses[anUrl] = statusCode
@@ -122,6 +131,10 @@ func main() {
 				left = left[20:]
 			}
 		}
+	}
+
+	for i := 0; i < 10; i++ {
+		go checkSitemap(c)
 	}
 
 	log.Println(http.ListenAndServe(httpAddr, nil))
