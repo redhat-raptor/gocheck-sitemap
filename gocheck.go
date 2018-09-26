@@ -17,14 +17,13 @@ var httpClient = &http.Client{
 	Timeout: time.Second * 10,
 }
 
-const CheckInterval = 2
+const CheckInterval = 10
 
 type URLs struct {
 	Locs    []string    `xml:"url>loc"`
 }
 
 var URLStatuses = map[string]int{}
-var mu sync.Mutex
 
 var httpAddr = fmt.Sprintf(":%s", getEnv("PORT", "3000"))
 
@@ -65,6 +64,9 @@ func checkSitemap(c chan string) {
 		mu.Unlock()
 		fmt.Println(anUrl, statusCode)
 	}
+
+	URLStatuses[anUrl] = statusCode
+	fmt.Println(anUrl, statusCode)
 }
 
 func getHTTPStatus(anUrl string) (int, error) {
@@ -77,9 +79,6 @@ func getHTTPStatus(anUrl string) (int, error) {
 }
 
 func serveHTTPStatuses(w http.ResponseWriter, r *http.Request) {
-	mu.Lock()
-	defer mu.Unlock()
-	
 	js, err := json.Marshal(URLStatuses)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -106,16 +105,33 @@ func main() {
 	//Listen to port to serve url statuses
 	http.HandleFunc("/", serveHTTPStatuses)
 	log.Println("Starting server ", httpAddr)
-	
-	c := make(chan string)
-	
-	go func() {
+
+	for {
+		left := urls.Locs
 		for {
-			for _, anUrl := range urls.Locs {
-					c <- anUrl
+			var wg sync.WaitGroup
+			wg.Add(20)
+		
+			for i := 0; i < 20; i++ {
+				if i >= len(left) {
+					break
+				}
+				go func(i int) {
+					defer wg.Done()
+					checkSitemap(left[i])
+				}(i)
+			}
+			
+			wg.Wait()
+			time.Sleep(CheckInterval * time.Second)
+			
+			if len(left) < 20 {
+				left = urls.Locs
+			} else {
+				left = left[20:]
 			}
 		}
-	}()
+	}
 
 	for i := 0; i < 10; i++ {
 		go checkSitemap(c)
