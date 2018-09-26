@@ -10,6 +10,7 @@ import (
 	"time"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 )
 
 var httpClient = &http.Client{
@@ -52,10 +53,8 @@ func getSitemap(sitemapUrl string) []byte {
 	return bodyBytes
 }
 
-func checkSitemap(urls URLs) {
-	for _, anUrl := range urls.Locs {
-		time.Sleep(CheckInterval * time.Second)
-
+func checkSitemap(c chan string) {
+	for anUrl := range c {
 		statusCode, err := getHTTPStatus(anUrl)
 		if err != nil {
 			continue
@@ -107,12 +106,20 @@ func main() {
 	//Listen to port to serve url statuses
 	http.HandleFunc("/", serveHTTPStatuses)
 	log.Println("Starting server ", httpAddr)
-
+	
+	c := make(chan string)
+	
 	go func() {
 		for {
-			checkSitemap(urls)
+			for _, anUrl := range urls.Locs {
+					c <- anUrl
+			}
 		}
 	}()
+
+	for i := 0; i < 10; i++ {
+		go checkSitemap(c)
+	}
 
 	log.Println(http.ListenAndServe(httpAddr, nil))
 }
