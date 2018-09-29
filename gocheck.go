@@ -5,25 +5,14 @@ import (
 	"log"
 	"os"
 	"fmt"
-	"io/ioutil"
-	"encoding/xml"
 	"time"
 	"encoding/json"
-	"sync"
+
+	"./urlstatus"
+	"./sitemap"
 )
 
-var httpClient = &http.Client{
-	Timeout: time.Second * 10,
-}
-
 const CheckInterval = 2
-
-type URLs struct {
-	Locs    []string    `xml:"url>loc"`
-}
-
-var URLStatuses = map[string]int{}
-var mu sync.Mutex
 
 var httpAddr = fmt.Sprintf(":%s", getEnv("PORT", "3000"))
 
@@ -35,24 +24,7 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
-func getSitemap(sitemapUrl string) []byte {
-	resp, err := httpClient.Get(sitemapUrl)
-	if err != nil {
-		log.Fatal("Error: ", err)
-		os.Exit(1)
-	}
-
-	defer resp.Body.Close()
-	bodyBytes, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
-
-	return bodyBytes
-}
-
-func checkSitemap(urls URLs) {
+func checkSitemap(urls sitemap.URLs) {
 	for _, anUrl := range urls.Locs {
 		time.Sleep(CheckInterval * time.Second)
 
@@ -61,9 +33,7 @@ func checkSitemap(urls URLs) {
 			continue
 		}
 
-		mu.Lock()
-		URLStatuses[anUrl] = statusCode
-		mu.Unlock()
+		urlstatus.SetUrlHTTPStatus(anUrl, statusCode)
 		fmt.Println(anUrl, statusCode)
 	}
 }
@@ -78,10 +48,7 @@ func getHTTPStatus(anUrl string) (int, error) {
 }
 
 func serveHTTPStatuses(w http.ResponseWriter, r *http.Request) {
-	mu.Lock()
-	defer mu.Unlock()
-	
-	js, err := json.Marshal(URLStatuses)
+	js, err := json.Marshal(urlstatus.GetUrlStatuses())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -99,10 +66,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	sitemap := getSitemap(siteMapUrls)
-
-	var urls URLs
-	xml.Unmarshal(sitemap, &urls)
+	sitemap.InitSitemap(siteMapUrls)
 
 	//Listen to port to serve url statuses
 	http.HandleFunc("/", serveHTTPStatuses)
@@ -110,7 +74,7 @@ func main() {
 
 	go func() {
 		for {
-			checkSitemap(urls)
+			checkSitemap(sitemap.GetSitemapURLs())
 		}
 	}()
 
