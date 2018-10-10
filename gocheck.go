@@ -1,21 +1,20 @@
 package main
 
 import (
-	"net/http"
-	"log"
-	"os"
-	"fmt"
-	"time"
 	"encoding/json"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"time"
 
-	"./urlstatus"
 	"./sitemap"
+	"./urlstatus"
 )
 
 const CheckInterval = 2
 
 var httpAddr = fmt.Sprintf(":%s", getEnv("PORT", "3000"))
-
 
 func getEnv(key, fallback string) string {
 	if value, ok := os.LookupEnv(key); ok {

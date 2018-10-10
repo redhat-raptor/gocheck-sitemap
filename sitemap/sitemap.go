@@ -1,18 +1,18 @@
 package sitemap
 
 import (
-	"log"
-	"io/ioutil"
-	"net/http"
-	"time"
 	"encoding/xml"
+	"io/ioutil"
+	"log"
+	"net/http"
 	"sync"
+	"time"
 )
 
 var mu sync.Mutex
 
 type URLs struct {
-	Locs    []string    `xml:"url>loc"`
+	Locs []string `xml:"url>loc"`
 }
 
 var urls URLs
