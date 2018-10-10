@@ -1,3 +1,5 @@
+![Docker Badge](https://img.shields.io/docker/build/redhatraptor/gocheck-sitemap.svg)
+
 # gocheck-sitemap
 Monitors the URLs in sitemap continuously and exposes the HTTP statuses as a service
 
